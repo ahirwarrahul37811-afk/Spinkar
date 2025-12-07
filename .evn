@@ -1,7 +1,0 @@
-MONGO_URI=mongodb://127.0.0.1:27017/promotionai
-JWT_SECRET=yourSecretKeyHere
-
-RAZORPAY_KEY_ID=rzp_test_123
-RAZORPAY_KEY_SECRET=test123
-
-ADMIN_TOKEN=superadmin123
