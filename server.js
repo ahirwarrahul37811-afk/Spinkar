@@ -247,6 +247,73 @@ app.post('/api/admin/withdrawals/update', isAdmin, (req, res) => {
   }
 });
 
+
+
+
+// ===============================
+// MANUAL ADD MONEY SYSTEM (UPI)
+// ===============================
+const manualPayments = [];
+
+// USER: Submit manual payment details
+app.post('/api/manual-add', (req, res) => {
+  try {
+    const { player, amount, txnId } = req.body;
+
+    if (!player || !amount || !txnId) {
+      return res.status(400).json({ success: false, message: "All fields required" });
+    }
+
+    manualPayments.push({
+      player,
+      amount: Number(amount),
+      txnId,
+      status: "Pending",
+      time: new Date().toISOString()
+    });
+
+    res.json({ success: true, message: "Manual payment submitted" });
+  } catch (err) {
+    console.error("manual-add error:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// ADMIN: Get all manual payments
+app.get('/api/admin/manual-payments', isAdmin, (req, res) => {
+  res.json({ success: true, data: manualPayments });
+});
+
+// ADMIN: Approve manual payment & ADD COINS
+app.post('/api/admin/manual-approve', isAdmin, (req, res) => {
+  try {
+    const { index } = req.body;
+    const item = manualPayments[index];
+
+    if (!item || item.status !== "Pending") {
+      return res.status(400).json({ success: false, message: "Invalid request" });
+    }
+
+    // ₹1 = 100 Coins
+    const coins = Math.round(item.amount * 100);
+    const p = getPlayer(item.player);
+
+    p.balance += coins;
+    item.status = "Approved";
+
+    res.json({
+      success: true,
+      newBalance: p.balance
+    });
+  } catch (err) {
+    console.error("manual-approve error:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+
+
+
 // ----- START SERVER -----
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
