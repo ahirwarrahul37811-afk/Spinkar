@@ -46,6 +46,33 @@ function isAdmin(req, res, next) {
 
 // ----- USER ROUTES -----
 
+
+
+// ===============================
+// ADS REWARD (SERVER CONTROLLED)
+// ===============================
+app.post('/api/watch-ad', (req, res) => {
+  try {
+    const { player } = req.body;
+    const p = getPlayer(player);
+
+    const AD_REWARD = 2; // ✅ FINAL: 1 Ad = 2 Coins (YAHIN SE CONTROL HOGA)
+
+    p.balance += AD_REWARD;
+
+    res.json({
+      success: true,
+      reward: AD_REWARD,
+      newBalance: p.balance
+    });
+  } catch (err) {
+    console.error("watch-ad error:", err);
+    res.status(500).json({ success: false });
+  }
+});
+
+
+
 // Get wallet balance
 app.get('/api/wallet', (req, res) => {
   const player = req.query.player;
