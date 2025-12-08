@@ -28,7 +28,7 @@ function getPlayer(player) {
   if (!player) player = "Guest";
   if (!players[player]) {
     players[player] = {
-      balance: 1000, // starting coins
+      balance: 30, // starting coins
       withdrawHistory: []
     };
   }
