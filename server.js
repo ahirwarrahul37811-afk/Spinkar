@@ -47,7 +47,6 @@ function isAdmin(req, res, next) {
 // ----- USER ROUTES -----
 
 
-
 // ===============================
 // ADS REWARD (SERVER CONTROLLED)
 // ===============================
@@ -70,6 +69,7 @@ app.post('/api/watch-ad', (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+
 
 
 
