@@ -8,22 +8,20 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ----- CONFIG -----
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123"; // change in .env
+
 // ----- MIDDLEWARE -----
 app.use(cors());
 app.use(express.json());
 
 // ----- RAZORPAY CLIENT -----
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,       // TEST KEY ID
-  key_secret: process.env.RAZORPAY_KEY_SECRET // TEST SECRET
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
 // ----- SIMPLE IN-MEMORY STORAGE (demo only) -----
-/*
-  In real app:
-   - Use proper DB (MySQL / MongoDB)
-   - Save users, wallet, withdrawals permanently
-*/
 const players = {}; // { [playerName]: { balance: number, withdrawHistory: [] } }
 
 function getPlayer(player) {
@@ -37,7 +35,16 @@ function getPlayer(player) {
   return players[player];
 }
 
-// ----- ROUTES -----
+// ----- ADMIN AUTH MIDDLEWARE -----
+function isAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'];
+  if (!token || token !== ADMIN_PASSWORD) {
+    return res.status(403).json({ success: false, message: "Not authorized" });
+  }
+  next();
+}
+
+// ----- USER ROUTES -----
 
 // Get wallet balance
 app.get('/api/wallet', (req, res) => {
@@ -65,9 +72,8 @@ app.post('/api/create-order', async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid coins amount" });
     }
 
-    // Conversion: 100 coins = ₹1, so 1 coin = ₹0.01
-    const rupees = coins / 100;
-    const amountPaise = Math.round(rupees * 100); // Razorpay amount in paise
+    const rupees = coins / 100; // 100 coins = ₹1
+    const amountPaise = Math.round(rupees * 100);
 
     const options = {
       amount: amountPaise,
@@ -86,7 +92,7 @@ app.post('/api/create-order', async (req, res) => {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      key: process.env.RAZORPAY_KEY_ID, // test key for frontend
+      key: process.env.RAZORPAY_KEY_ID
     });
 
   } catch (err) {
@@ -147,7 +153,6 @@ app.post('/api/withdraw-request', (req, res) => {
       return res.status(400).json({ success: false, message: "Insufficient balance" });
     }
 
-    // Deduct coins immediately (or you can deduct after manual approval)
     p.balance -= coinsNum;
     const rupees = (coinsNum / 100).toFixed(2);
 
@@ -156,6 +161,8 @@ app.post('/api/withdraw-request', (req, res) => {
       amountInRupees: rupees,
       upiId,
       status: "Pending",
+      txnId: "",
+      note: "",
       time: new Date().toISOString()
     };
 
@@ -173,7 +180,7 @@ app.post('/api/withdraw-request', (req, res) => {
   }
 });
 
-// Get withdraw history
+// Get withdraw history for one player
 app.get('/api/withdraw-history', (req, res) => {
   const player = req.query.player;
   const p = getPlayer(player);
@@ -181,6 +188,63 @@ app.get('/api/withdraw-history', (req, res) => {
     success: true,
     history: p.withdrawHistory
   });
+});
+
+// ----- ADMIN ROUTES -----
+
+// Get all withdrawals (all players)
+app.get('/api/admin/withdrawals', isAdmin, (req, res) => {
+  const all = [];
+
+  for (const [playerName, data] of Object.entries(players)) {
+    data.withdrawHistory.forEach((w, index) => {
+      all.push({
+        player: playerName,
+        index,
+        coins: w.coins,
+        amountInRupees: w.amountInRupees,
+        upiId: w.upiId,
+        status: w.status,
+        txnId: w.txnId || "",
+        note: w.note || "",
+        time: w.time
+      });
+    });
+  }
+
+  // latest first
+  all.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  res.json({ success: true, withdrawals: all });
+});
+
+// Update one withdrawal (approve/reject)
+app.post('/api/admin/withdrawals/update', isAdmin, (req, res) => {
+  try {
+    const { player, index, status, txnId, note } = req.body;
+
+    if (!player || typeof index !== "number") {
+      return res.status(400).json({ success: false, message: "Player and index required" });
+    }
+
+    if (!["Pending", "Approved", "Rejected"].includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status" });
+    }
+
+    const p = getPlayer(player);
+    if (!p.withdrawHistory[index]) {
+      return res.status(404).json({ success: false, message: "Withdraw not found" });
+    }
+
+    p.withdrawHistory[index].status = status;
+    p.withdrawHistory[index].txnId = txnId || p.withdrawHistory[index].txnId || "";
+    p.withdrawHistory[index].note = note || p.withdrawHistory[index].note || "";
+
+    res.json({ success: true, history: p.withdrawHistory });
+  } catch (err) {
+    console.error("admin update error:", err);
+    res.status(500).json({ success: false, message: "Server error updating withdrawal" });
+  }
 });
 
 // ----- START SERVER -----
