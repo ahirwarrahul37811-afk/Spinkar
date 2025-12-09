@@ -4,6 +4,7 @@ const express = require('express');
 const Razorpay = require('razorpay');
 const cors = require('cors');
 const crypto = require('crypto');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,6 +21,25 @@ const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET
 });
+
+// ----- TELEGRAM NOTIFICATION -----
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+async function sendTelegram(message) {
+  try {
+    if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    await axios.post(url, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: message,
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    });
+  } catch (err) {
+    console.error("sendTelegram error:", err.message || err);
+  }
+}
 
 // ----- SIMPLE IN-MEMORY STORAGE (demo only) -----
 const players = {}; // { [playerName]: { balance: number, withdrawHistory: [] } }
@@ -129,7 +149,7 @@ app.post('/api/create-order', async (req, res) => {
 });
 
 // Verify payment and add coins
-app.post('/api/payment/verify', (req, res) => {
+app.post('/api/payment/verify', async (req, res) => {
   try {
     const { player, coins, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
@@ -151,6 +171,14 @@ app.post('/api/payment/verify', (req, res) => {
     const coinsNum = parseInt(coins, 10) || 0;
     p.balance += coinsNum;
 
+    // Notify admin via Telegram about successful payment
+    try {
+      const msg = `✅ <b>Payment Verified</b>\n\n👤 Player: ${player}\n🪙 Coins Added: ${coinsNum}\n🕒 ${new Date().toLocaleString()}`;
+      await sendTelegram(msg);
+    } catch (e) {
+      console.error("telegram notify error:", e);
+    }
+
     res.json({
       success: true,
       newBalance: p.balance
@@ -162,7 +190,7 @@ app.post('/api/payment/verify', (req, res) => {
 });
 
 // Withdraw request
-app.post('/api/withdraw-request', (req, res) => {
+app.post('/api/withdraw-request', async (req, res) => {
   try {
     const { player, upiId, coins } = req.body;
     const p = getPlayer(player);
@@ -194,6 +222,14 @@ app.post('/api/withdraw-request', (req, res) => {
     };
 
     p.withdrawHistory.push(entry);
+
+    // Notify admin via Telegram about withdrawal request
+    try {
+      const msg = `📤 <b>Withdraw Request</b>\n\n👤 Player: ${player}\n🪙 Coins: ${coinsNum}\n💰 Rupees: ₹${rupees}\n🏦 UPI: ${upiId}\n🕒 ${new Date().toLocaleString()}`;
+      await sendTelegram(msg);
+    } catch (e) {
+      console.error("telegram notify error:", e);
+    }
 
     res.json({
       success: true,
@@ -246,7 +282,7 @@ app.get('/api/admin/withdrawals', isAdmin, (req, res) => {
 });
 
 // Update one withdrawal (approve/reject)
-app.post('/api/admin/withdrawals/update', isAdmin, (req, res) => {
+app.post('/api/admin/withdrawals/update', isAdmin, async (req, res) => {
   try {
     const { player, index, status, txnId, note } = req.body;
 
@@ -267,6 +303,14 @@ app.post('/api/admin/withdrawals/update', isAdmin, (req, res) => {
     p.withdrawHistory[index].txnId = txnId || p.withdrawHistory[index].txnId || "";
     p.withdrawHistory[index].note = note || p.withdrawHistory[index].note || "";
 
+    // Notify admin via Telegram about the update (approved/rejected)
+    try {
+      const msg = `🔔 <b>Withdrawal ${status}</b>\n\n👤 Player: ${player}\nTxn Index: ${index}\nTxn ID: ${p.withdrawHistory[index].txnId || '-'}\nNote: ${p.withdrawHistory[index].note || '-'}\n🕒 ${new Date().toLocaleString()}`;
+      await sendTelegram(msg);
+    } catch (e) {
+      console.error("telegram notify error:", e);
+    }
+
     res.json({ success: true, history: p.withdrawHistory });
   } catch (err) {
     console.error("admin update error:", err);
@@ -283,7 +327,7 @@ app.post('/api/admin/withdrawals/update', isAdmin, (req, res) => {
 const manualPayments = [];
 
 // USER: Submit manual payment details
-app.post('/api/manual-add', (req, res) => {
+app.post('/api/manual-add', async (req, res) => {
   try {
     const { player, amount, txnId } = req.body;
 
@@ -291,13 +335,22 @@ app.post('/api/manual-add', (req, res) => {
       return res.status(400).json({ success: false, message: "All fields required" });
     }
 
-    manualPayments.push({
+    const item = {
       player,
       amount: Number(amount),
       txnId,
       status: "Pending",
       time: new Date().toISOString()
-    });
+    };
+    manualPayments.push(item);
+
+    // Notify admin via Telegram about manual payment request
+    try {
+      const msg = `💳 <b>Manual Payment Submitted</b>\n\n👤 Player: ${player}\n💵 Amount: ₹${amount}\n🔖 Txn ID: ${txnId}\n🕒 ${new Date().toLocaleString()}`;
+      await sendTelegram(msg);
+    } catch (e) {
+      console.error("telegram notify error:", e);
+    }
 
     res.json({ success: true, message: "Manual payment submitted" });
   } catch (err) {
@@ -312,7 +365,7 @@ app.get('/api/admin/manual-payments', isAdmin, (req, res) => {
 });
 
 // ADMIN: Approve manual payment & ADD COINS
-app.post('/api/admin/manual-approve', isAdmin, (req, res) => {
+app.post('/api/admin/manual-approve', isAdmin, async (req, res) => {
   try {
     const { index } = req.body;
     const item = manualPayments[index];
@@ -327,6 +380,14 @@ app.post('/api/admin/manual-approve', isAdmin, (req, res) => {
 
     p.balance += coins;
     item.status = "Approved";
+
+    // Notify admin that manual payment was approved and coins added
+    try {
+      const msg = `✅ <b>Manual Payment Approved</b>\n\n👤 Player: ${item.player}\n💵 Amount: ₹${item.amount}\n🪙 Coins Added: ${coins}\n🕒 ${new Date().toLocaleString()}`;
+      await sendTelegram(msg);
+    } catch (e) {
+      console.error("telegram notify error:", e);
+    }
 
     res.json({
       success: true,
